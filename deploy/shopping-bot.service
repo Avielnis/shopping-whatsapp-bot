@@ -1,0 +1,15 @@
+[Unit]
+Description=Shopping List WhatsApp Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/shopping-whatsapp-bot
+ExecStart=/home/pi/shopping-whatsapp-bot/venv/bin/python main.py
+EnvironmentFile=/home/pi/shopping-whatsapp-bot/.env
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
