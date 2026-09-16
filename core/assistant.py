@@ -13,7 +13,8 @@ HELP_TEXT = (
     "• בטל סימון <מוצר> — ביטול סימון\n"
     "• מחק <מוצר> — מחיקת מוצר מהרשימה\n"
     "• נקה / מחק הכל — ניקוי הרשימה כולה\n"
-    "• עזרה — הצגת ההודעה הזו"
+    "• עזרה — הצגת ההודעה הזו\n\n"
+    "ניתן גם להשתמש במספר מהרשימה במקום שם המוצר, למשל: מחק 1"
 )
 
 
@@ -47,12 +48,14 @@ class ShoppingListAssistant:
                 ]
             )
         if command.action == Action.REMOVE:
-            removed, not_found = self._service.remove_items(command.items)
+            items = self._service.resolve(command.items)
+            removed, not_found = self._service.remove_items(items)
             return self._format_reply(
                 [("🗑️ נמחקו", removed), ("⚠️ לא נמצאו ברשימה", not_found)]
             )
         if command.action == Action.MARK:
-            marked, already_collected, not_found = self._service.mark_collected(command.items)
+            items = self._service.resolve(command.items)
+            marked, already_collected, not_found = self._service.mark_collected(items)
             return self._format_reply(
                 [
                     ("✅ סומנו כנאספו", marked),
@@ -61,7 +64,8 @@ class ShoppingListAssistant:
                 ]
             )
         if command.action == Action.UNMARK:
-            unmarked, not_found = self._service.unmark(command.items)
+            items = self._service.resolve(command.items)
+            unmarked, not_found = self._service.unmark(items)
             return self._format_reply(
                 [
                     ("↩️ בוטל סימון עבור", unmarked),
@@ -84,8 +88,13 @@ class ShoppingListAssistant:
         if not pending and not collected:
             return "הרשימה ריקה 🎉"
         lines = ["🛒 *רשימת קניות*", ""]
-        lines += [f"☐ {with_emoji(name)}" for name in pending]
+        number = 1
+        for name in pending:
+            lines.append(f"{number}) ☐ {with_emoji(name)}")
+            number += 1
         if collected:
             lines.append("")
-            lines += [f"✅ {with_emoji(name)}" for name in collected]
+            for name in collected:
+                lines.append(f"{number}) ✅ {with_emoji(name)}")
+                number += 1
         return "\n".join(lines)

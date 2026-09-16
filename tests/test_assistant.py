@@ -67,8 +67,35 @@ def test_list_shows_pending_and_collected(assistant):
     assistant.handle_message("לחם")
     assistant.handle_message("סמן לחם")
     reply = assistant.handle_message("רשימה")
-    assert "☐ " in reply and "חלב" in reply
-    assert "✅ " in reply and "לחם" in reply
+    assert "1) ☐ " in reply and "חלב" in reply
+    assert "2) ✅ " in reply and "לחם" in reply
+
+
+def test_remove_item_by_its_list_number(assistant):
+    assistant.handle_message("חלב, לחם")
+    reply = assistant.handle_message("מחק 2")
+    assert "נמחקו" in reply and "לחם" in reply
+    pending, _ = assistant._service.get_list()
+    assert pending == ["חלב"]
+
+
+def test_mark_item_by_its_list_number(assistant):
+    assistant.handle_message("חלב, לחם")
+    reply = assistant.handle_message("סמן 1")
+    assert "סומנו כנאספו" in reply and "חלב" in reply
+
+
+def test_unmark_item_by_its_list_number(assistant):
+    assistant.handle_message("חלב")
+    assistant.handle_message("סמן חלב")
+    reply = assistant.handle_message("בטל סימון 1")
+    assert "בוטל סימון" in reply and "חלב" in reply
+
+
+def test_out_of_range_number_is_reported_as_not_found(assistant):
+    assistant.handle_message("חלב")
+    reply = assistant.handle_message("מחק 5")
+    assert "לא נמצאו" in reply
 
 
 def test_list_prefixes_items_with_a_matching_emoji(assistant):

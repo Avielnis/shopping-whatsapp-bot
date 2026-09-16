@@ -94,6 +94,23 @@ class ShoppingListService:
         self._conn.commit()
         return unmarked, not_found
 
+    def resolve(self, tokens: list[str]) -> list[str]:
+        """Translate 1-based position numbers (matching the numbered
+        `רשימה` output) into item names; non-numeric tokens pass through
+        unchanged."""
+        numbered = None
+        resolved = []
+        for token in tokens:
+            if token.isdigit():
+                if numbered is None:
+                    pending, collected = self.get_list()
+                    numbered = pending + collected
+                index = int(token) - 1
+                resolved.append(numbered[index] if 0 <= index < len(numbered) else token)
+            else:
+                resolved.append(token)
+        return resolved
+
     def get_list(self):
         pending = [
             row[0]
