@@ -1,4 +1,6 @@
 import logging
+from collections import OrderedDict
+from datetime import datetime
 
 from neonize.client import NewClient
 from neonize.events import ConnectedEv, MessageEv, event
@@ -7,6 +9,8 @@ from core.assistant import ShoppingListAssistant
 
 log = logging.getLogger(__name__)
 
+_MAX_SEEN_CHATS = 20
+
 
 class WhatsAppClient:
     """The only module that knows about neonize/WhatsApp. It filters messages
@@ -14,7 +18,9 @@ class WhatsAppClient:
 
     def __init__(self, assistant: ShoppingListAssistant, session_path: str, allowed_chat_jid: str):
         self._assistant = assistant
-        self._allowed_chat_jid = allowed_chat_jid
+        self.allowed_chat_jid = allowed_chat_jid
+        self.is_connected = False
+        self.seen_chats: "OrderedDict[str, str]" = OrderedDict()  # jid -> last-seen timestamp
         self._sent_ids: set[str] = set()
         self._client = NewClient(session_path)
         self._client.event(ConnectedEv)(self._on_connected)
@@ -25,7 +31,14 @@ class WhatsAppClient:
         event.wait()
 
     def _on_connected(self, _client, _event):
+        self.is_connected = True
         log.info("מחובר לוואטסאפ")
+
+    def _remember_chat(self, chat: str):
+        self.seen_chats[chat] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.seen_chats.move_to_end(chat)
+        while len(self.seen_chats) > _MAX_SEEN_CHATS:
+            self.seen_chats.popitem(last=False)
 
     def _on_message(self, client: NewClient, message: MessageEv):
         if message.Info.ID in self._sent_ids:
@@ -33,10 +46,12 @@ class WhatsAppClient:
 
         chat_jid = message.Info.MessageSource.Chat
         chat = f"{chat_jid.User}@{chat_jid.Server}"
-        if not self._allowed_chat_jid:
+        self._remember_chat(chat)
+
+        if not self.allowed_chat_jid:
             log.info("צ'אט זוהה: %s (הגדר ALLOWED_CHAT_JID כדי להפעיל את הבוט עליו)", chat)
             return
-        if chat != self._allowed_chat_jid:
+        if chat != self.allowed_chat_jid:
             return
 
         text = message.Message.conversation or message.Message.extendedTextMessage.text

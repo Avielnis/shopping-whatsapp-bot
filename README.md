@@ -6,7 +6,8 @@
 
 - `core/` — כל הלוגיקה (פרסור פקודות, ניהול הרשימה, פורמט תשובות). לא תלוי בוואטסאפ בכלל.
 - `frontends/whatsapp_client.py` — המודול היחיד שתלוי ב-`neonize`. מסנן הודעות רק מהצ'אט המורשה, ומעביר טקסט ל-`core`.
-- `main.py` — מחבר את הכול ומריץ.
+- `frontends/web_admin.py` — דף ניהול מקומי (Flask) לצפייה בסטטוס ועריכת הקונפיגורציה.
+- `main.py` — מחבר את הכול ומריץ, כולל שני השרתים (וואטסאפ + דף הניהול) יחד.
 
 כדי להחליף את וואטסאפ בפרונט אחר (טלגרם, ווב) — כותבים מודול `frontends` חדש; `core` לא משתנה.
 
@@ -42,14 +43,28 @@ pytest                          # בדיקות הליבה, בלי וואטסאפ
 
 הסשן של וואטסאפ (הפיירינג) נשמר בקובץ `data/session.db` — לא צריך לסרוק שוב בכל הרצה.
 
+## דף ניהול
+
+כשהבוט רץ, זמין דף ניהול מקומי בכתובת `http://<כתובת-הפיי>:80/whatsapp` (רק ברשת הבית — לא חשוף לאינטרנט). הוא מציג את סטטוס החיבור, כמות המוצרים הפתוחים/נאספים, ורשימת צ'אטים שזוהו לאחרונה (כדי לבחור מהם את `ALLOWED_CHAT_JID` בלי לחפש בלוגים). עריכת הגדרות ולחיצה על "Save & restart" שומרת ל-`.env` **ומאתחלת את הראזפברי פיי** כדי שהשינוי ייכנס לתוקף.
+
+הרצה על פורט 80 ואתחול הפיי מתוך הבוט דורשים שתי הרשאות חד-פעמיות בפיי (ראה בהמשך).
+
 ## מעבר לראזפברי פיי
 
 1. העתק את כל התיקייה (או `git clone`) לפיי, ואת תיקיית `data/` מהמחשב (כדי לשמר את הפיירינג בלי לסרוק שוב).
 2. `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt`
    - `neonize` עוטף ליבה בשפת Go — ודא שההתקנה מצליחה על ה-Raspberry Pi OS (aarch64) לפני שממשיכים; אם אין wheel מוכן ייתכן שיהיה צורך להתקין Go ולבנות מקור.
-3. התקנת שירות `systemd` להרצה קבועה:
+3. שתי הרשאות חד-פעמיות שדף הניהול צריך (הבוט עצמו רץ כמשתמש רגיל, לא root):
+   ```bash
+   # לאפשר לפייתון להאזין לפורט 80 בלי להריץ את כל הבוט כ-root
+   sudo setcap 'cap_net_bind_service=+ep' /home/pi/shopping-whatsapp-bot/venv/bin/python3
+
+   # לאפשר לבוט להפעיל "sudo reboot" בלי בקשת סיסמה
+   echo "$(whoami) ALL=NOPASSWD: /sbin/reboot" | sudo tee /etc/sudoers.d/shopping-bot-reboot
+   ```
+4. התקנת שירות `systemd` להרצה קבועה:
    ```bash
    sudo cp deploy/shopping-bot.service /etc/systemd/system/
    sudo systemctl enable --now shopping-bot
    ```
-4. `journalctl -u shopping-bot -f` למעקב אחר הלוגים.
+5. `journalctl -u shopping-bot -f` למעקב אחר הלוגים.

@@ -1,3 +1,4 @@
 neonize
 python-dotenv
+flask
 pytest

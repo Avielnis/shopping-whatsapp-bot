@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import threading
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -8,6 +9,7 @@ sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from config import Config
 from core.assistant import ShoppingListAssistant
 from core.shopping_list import ShoppingListService
+from frontends.web_admin import create_admin_app, run_admin_server
 from frontends.whatsapp_client import WhatsAppClient
 
 logging.basicConfig(
@@ -30,6 +32,12 @@ def main():
     service = ShoppingListService(config.db_path)
     assistant = ShoppingListAssistant(service)
     client = WhatsAppClient(assistant, config.session_path, config.allowed_chat_jid)
+
+    admin_app = create_admin_app(config, client, service)
+    threading.Thread(
+        target=run_admin_server, args=(admin_app, "0.0.0.0", config.admin_port), daemon=True
+    ).start()
+
     client.run()
 
 
