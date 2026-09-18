@@ -1,4 +1,5 @@
 neonize
 python-dotenv
 flask
+segno
 pytest

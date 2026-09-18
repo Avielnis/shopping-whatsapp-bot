@@ -2,6 +2,7 @@ import logging
 from collections import OrderedDict
 from datetime import datetime
 
+import segno
 from neonize.client import NewClient
 from neonize.events import ConnectedEv, MessageEv, event
 
@@ -20,18 +21,26 @@ class WhatsAppClient:
         self._assistant = assistant
         self.allowed_chat_jid = allowed_chat_jid
         self.is_connected = False
+        self.qr_data_uri: str | None = None
         self.seen_chats: "OrderedDict[str, str]" = OrderedDict()  # jid -> last-seen timestamp
         self._sent_ids: set[str] = set()
         self._client = NewClient(session_path)
         self._client.event(ConnectedEv)(self._on_connected)
         self._client.event(MessageEv)(self._on_message)
+        self._client.event.qr(self._on_qr)
 
     def run(self):
         self._client.connect()
         event.wait()
 
+    def _on_qr(self, _client, data_qr: bytes):
+        self.qr_data_uri = segno.make_qr(data_qr).png_data_uri(scale=6)
+        self.is_connected = False
+        log.info("קוד QR חדש מוכן לסריקה - זמין בדף הניהול (/whatsapp)")
+
     def _on_connected(self, _client, _event):
         self.is_connected = True
+        self.qr_data_uri = None
         log.info("מחובר לוואטסאפ")
 
     def _remember_chat(self, chat: str):

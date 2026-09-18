@@ -85,6 +85,9 @@ _PAGE = """
   .clear-row button { background: transparent; color: #dc2626; font-weight: 500; font-size: .8rem; padding: .3rem; width: auto; margin: 0; }
   .clear-row button:hover { background: #fef2f2; }
 
+  #qr-section { text-align: center; margin-bottom: 1.5rem; }
+  #qr-section img { width: 100%; max-width: 240px; border-radius: 12px; border: 1px solid #e2e8f0; }
+
   #logs {
     margin: 0; max-height: 260px; overflow-y: auto; background: #0f172a; color: #cbd5e1;
     padding: .9rem; border-radius: 10px; font-family: ui-monospace, Consolas, monospace;
@@ -97,15 +100,20 @@ _PAGE = """
     <h1>🛒 Shopping List Bot — Admin</h1>
 
     <div class="status-row">
-      <div class="badge {{ 'ok' if connected else 'warn' }}">
-        WhatsApp<b>{{ 'Connected' if connected else 'Waiting' }}</b>
+      <div class="badge {{ 'ok' if connected else 'warn' }}" id="conn-badge">
+        WhatsApp<b id="conn-text">{{ 'Connected' if connected else 'Waiting' }}</b>
       </div>
       <div class="badge">Pending<b>{{ pending_count }}</b></div>
       <div class="badge">Collected<b>{{ collected_count }}</b></div>
     </div>
 
+    <div id="qr-section" {{ '' if qr_data_uri else 'hidden' }}>
+      <p class="hint">Scan with WhatsApp → Linked Devices → Link a Device</p>
+      <img id="qr-img" src="{{ qr_data_uri or '' }}" alt="WhatsApp pairing QR code">
+    </div>
+
     <h2>Shopping list</h2>
-    <form method="post" action="/whatsapp/list/add" class="add-row">
+    <form method="post" action="/list/add" class="add-row">
       <input type="text" name="text" placeholder="Add item(s), comma/space/newline separated" autocomplete="off">
       <button type="submit">Add</button>
     </form>
@@ -116,11 +124,11 @@ _PAGE = """
 
     {% for item in pending_items %}
     <div class="item-row">
-      <form method="post" action="/whatsapp/list/toggle">
+      <form method="post" action="/list/toggle">
         <input type="hidden" name="name" value="{{ item.name }}">
         <label><input type="checkbox" name="checked" onchange="this.form.submit()"> {{ item.label }}</label>
       </form>
-      <form method="post" action="/whatsapp/list/remove">
+      <form method="post" action="/list/remove">
         <input type="hidden" name="name" value="{{ item.name }}">
         <button type="submit" class="icon-btn" title="Delete">✕</button>
       </form>
@@ -131,11 +139,11 @@ _PAGE = """
 
     {% for item in collected_items %}
     <div class="item-row collected">
-      <form method="post" action="/whatsapp/list/toggle">
+      <form method="post" action="/list/toggle">
         <input type="hidden" name="name" value="{{ item.name }}">
         <label><input type="checkbox" name="checked" checked onchange="this.form.submit()"> {{ item.label }}</label>
       </form>
-      <form method="post" action="/whatsapp/list/remove">
+      <form method="post" action="/list/remove">
         <input type="hidden" name="name" value="{{ item.name }}">
         <button type="submit" class="icon-btn" title="Delete">✕</button>
       </form>
@@ -143,7 +151,7 @@ _PAGE = """
     {% endfor %}
 
     {% if pending_items or collected_items %}
-    <form method="post" action="/whatsapp/list/clear" class="clear-row"
+    <form method="post" action="/list/clear" class="clear-row"
           onsubmit="return confirm('Clear the entire list?')">
       <button type="submit">Clear entire list</button>
     </form>
@@ -193,7 +201,7 @@ document.getElementById('config-form').addEventListener('submit', async (e) => {
   button.disabled = true;
   banner.style.display = 'block';
   banner.textContent = 'Saving and restarting the Raspberry Pi… this page will stop responding shortly.';
-  await fetch('/whatsapp/save', { method: 'POST', body: new FormData(e.target) });
+  await fetch('/save', { method: 'POST', body: new FormData(e.target) });
 });
 
 const logsEl = document.getElementById('logs');
@@ -201,12 +209,27 @@ logsEl.scrollTop = logsEl.scrollHeight;
 setInterval(async () => {
   const atBottom = logsEl.scrollTop + logsEl.clientHeight >= logsEl.scrollHeight - 10;
   try {
-    const res = await fetch('/whatsapp/logs');
+    const res = await fetch('/logs');
     const data = await res.json();
     logsEl.textContent = data.logs;
     if (atBottom) logsEl.scrollTop = logsEl.scrollHeight;
   } catch (e) { /* ignore transient network errors */ }
 }, 4000);
+
+const connBadge = document.getElementById('conn-badge');
+const connText = document.getElementById('conn-text');
+const qrSection = document.getElementById('qr-section');
+const qrImg = document.getElementById('qr-img');
+setInterval(async () => {
+  try {
+    const res = await fetch('/status');
+    const data = await res.json();
+    connBadge.className = 'badge ' + (data.connected ? 'ok' : 'warn');
+    connText.textContent = data.connected ? 'Connected' : 'Waiting';
+    qrSection.hidden = !data.qr_data_uri;
+    if (data.qr_data_uri) qrImg.src = data.qr_data_uri;
+  } catch (e) { /* ignore transient network errors */ }
+}, 3000);
 </script>
 </body>
 </html>
@@ -227,12 +250,13 @@ def create_admin_app(
 ) -> Flask:
     app = Flask(__name__)
 
-    @app.get("/whatsapp")
+    @app.get("/")
     def dashboard():
         pending, collected = service.get_list()
         return render_template_string(
             _PAGE,
             connected=whatsapp_client.is_connected,
+            qr_data_uri=whatsapp_client.qr_data_uri,
             pending_count=len(pending),
             collected_count=len(collected),
             pending_items=[{"name": name, "label": with_emoji(name)} for name in pending],
@@ -245,18 +269,22 @@ def create_admin_app(
             initial_logs=_read_log_tail(),
         )
 
-    @app.get("/whatsapp/logs")
+    @app.get("/logs")
     def logs():
         return jsonify(logs=_read_log_tail())
 
-    @app.post("/whatsapp/list/add")
+    @app.get("/status")
+    def status():
+        return jsonify(connected=whatsapp_client.is_connected, qr_data_uri=whatsapp_client.qr_data_uri)
+
+    @app.post("/list/add")
     def list_add():
         items = [item for item in _SPLIT_RE.split(request.form.get("text", "").strip()) if item]
         if items:
             service.add_items(items)
-        return redirect("/whatsapp")
+        return redirect("/")
 
-    @app.post("/whatsapp/list/toggle")
+    @app.post("/list/toggle")
     def list_toggle():
         name = request.form.get("name", "")
         if name:
@@ -264,21 +292,21 @@ def create_admin_app(
                 service.mark_collected([name])
             else:
                 service.unmark([name])
-        return redirect("/whatsapp")
+        return redirect("/")
 
-    @app.post("/whatsapp/list/remove")
+    @app.post("/list/remove")
     def list_remove():
         name = request.form.get("name", "")
         if name:
             service.remove_items([name])
-        return redirect("/whatsapp")
+        return redirect("/")
 
-    @app.post("/whatsapp/list/clear")
+    @app.post("/list/clear")
     def list_clear():
         service.clear_all()
-        return redirect("/whatsapp")
+        return redirect("/")
 
-    @app.post("/whatsapp/save")
+    @app.post("/save")
     def save():
         for key in ("ALLOWED_CHAT_JID", "DB_PATH", "SESSION_PATH", "ADMIN_PORT"):
             set_key(env_path, key, request.form.get(key, ""))
@@ -293,5 +321,5 @@ def _reboot():
     subprocess.run(["sudo", "reboot"])
 
 
-def run_admin_server(app: Flask, host: str = "0.0.0.0", port: int = 80):
+def run_admin_server(app: Flask, host: str = "0.0.0.0", port: int = 8080):
     app.run(host=host, port=port)

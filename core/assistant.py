@@ -34,45 +34,52 @@ class ShoppingListAssistant:
             return self._format_list()
         if command.action == Action.CLEAR:
             self._service.clear_all()
-            return "🧹 הרשימה נוקתה"
+            return self._with_full_list("🧹 הרשימה נוקתה")
         if not command.items:
-            return "לא זיהיתי מוצרים בהודעה 🤔"
+            return self._with_full_list("לא זיהיתי מוצרים בהודעה 🤔")
 
         if command.action == Action.ADD:
             added, already_pending, restored = self._service.add_items(command.items)
-            return self._format_reply(
+            reply = self._format_reply(
                 [
                     ("✅ נוספו", added),
                     ("↩️ הוחזרו לרשימה", restored),
                     ("⚠️ כבר ברשימה", already_pending),
                 ]
             )
+            return self._with_full_list(reply)
         if command.action == Action.REMOVE:
             items = self._service.resolve(command.items)
             removed, not_found = self._service.remove_items(items)
-            return self._format_reply(
+            reply = self._format_reply(
                 [("🗑️ נמחקו", removed), ("⚠️ לא נמצאו ברשימה", not_found)]
             )
+            return self._with_full_list(reply)
         if command.action == Action.MARK:
             items = self._service.resolve(command.items)
             marked, already_collected, not_found = self._service.mark_collected(items)
-            return self._format_reply(
+            reply = self._format_reply(
                 [
                     ("✅ סומנו כנאספו", marked),
                     ("⚠️ כבר סומנו", already_collected),
                     ("⚠️ לא נמצאו ברשימה", not_found),
                 ]
             )
+            return self._with_full_list(reply)
         if command.action == Action.UNMARK:
             items = self._service.resolve(command.items)
             unmarked, not_found = self._service.unmark(items)
-            return self._format_reply(
+            reply = self._format_reply(
                 [
                     ("↩️ בוטל סימון עבור", unmarked),
                     ("⚠️ לא נמצאו ברשימה מסומנת", not_found),
                 ]
             )
-        return "לא הבנתי את ההודעה 🤔"
+            return self._with_full_list(reply)
+        return self._with_full_list("לא הבנתי את ההודעה 🤔")
+
+    def _with_full_list(self, reply: str) -> str:
+        return f"{reply}\n\n{self._format_list()}"
 
     @staticmethod
     def _format_reply(groups: list[tuple[str, list[str]]]) -> str:
@@ -90,11 +97,11 @@ class ShoppingListAssistant:
         lines = ["🛒 *רשימת קניות*", ""]
         number = 1
         for name in pending:
-            lines.append(f"{number}) ☐ {with_emoji(name)}")
+            lines.append(f"{number}) {with_emoji(name)}")
             number += 1
         if collected:
             lines.append("")
             for name in collected:
-                lines.append(f"{number}) ✅ {with_emoji(name)}")
+                lines.append(f"{number}) ~{with_emoji(name)}~")
                 number += 1
         return "\n".join(lines)
