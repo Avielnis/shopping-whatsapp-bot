@@ -6,7 +6,7 @@ import segno
 from neonize.client import NewClient
 from neonize.events import ConnectedEv, MessageEv, event
 
-from core.assistant import ShoppingListAssistant
+from core.assistant import BOT_LABEL, ShoppingListAssistant
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +23,6 @@ class WhatsAppClient:
         self.is_connected = False
         self.qr_data_uri: str | None = None
         self.seen_chats: "OrderedDict[str, str]" = OrderedDict()  # jid -> last-seen timestamp
-        self._sent_ids: set[str] = set()
         self._client = NewClient(session_path)
         self._client.event(ConnectedEv)(self._on_connected)
         self._client.event(MessageEv)(self._on_message)
@@ -50,8 +49,11 @@ class WhatsAppClient:
             self.seen_chats.popitem(last=False)
 
     def _on_message(self, client: NewClient, message: MessageEv):
-        if message.Info.ID in self._sent_ids:
-            return  # the bot's own reply looping back in
+        text = message.Message.conversation or message.Message.extendedTextMessage.text
+        if not text:
+            return
+        if text.startswith(BOT_LABEL):
+            return  # the bot's own message looping back in (multi-device echo)
 
         chat_jid = message.Info.MessageSource.Chat
         chat = f"{chat_jid.User}@{chat_jid.Server}"
@@ -63,16 +65,10 @@ class WhatsAppClient:
         if chat != self.allowed_chat_jid:
             return
 
-        text = message.Message.conversation or message.Message.extendedTextMessage.text
-        if not text:
-            return
-
         sender_jid = message.Info.MessageSource.Sender
         sender = f"{sender_jid.User}@{sender_jid.Server}"
         log.info("התקבל מ-%s: %s", sender, text)
 
         reply = self._assistant.handle_message(text)
-        sent = client.reply_message(reply, message)
-        if sent is not None:
-            self._sent_ids.add(sent.ID)
+        client.reply_message(reply, message)
         log.info("נשלח: %s", reply.replace("\n", " | "))

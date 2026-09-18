@@ -10,6 +10,7 @@ class Action(Enum):
     LIST = auto()
     CLEAR = auto()
     HELP = auto()
+    SITE = auto()
 
 
 @dataclass

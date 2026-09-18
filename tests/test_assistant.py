@@ -161,3 +161,37 @@ def test_clear_empties_the_list(assistant):
 
 def test_help_lists_commands(assistant):
     assert "פקודות" in assistant.handle_message("עזרה")
+
+
+def test_help_includes_web_url_when_provider_returns_one():
+    assistant = ShoppingListAssistant(
+        ShoppingListService(":memory:"), web_url_provider=lambda: "https://example.trycloudflare.com"
+    )
+    assert "https://example.trycloudflare.com" in assistant.handle_message("עזרה")
+
+
+def test_site_command_returns_just_the_link():
+    assistant = ShoppingListAssistant(
+        ShoppingListService(":memory:"), web_url_provider=lambda: "https://example.trycloudflare.com"
+    )
+    reply = assistant.handle_message("אתר הרשימה")
+    assert reply == "🤖 _בוט_\n🌐 אתר הרשימה: https://example.trycloudflare.com"
+
+
+def test_site_command_reports_when_link_not_ready():
+    assistant = ShoppingListAssistant(ShoppingListService(":memory:"), web_url_provider=lambda: None)
+    reply = assistant.handle_message("אתר הרשימה")
+    assert "לא מוכן" in reply
+
+
+def test_every_reply_gets_the_link_footer_when_available():
+    assistant = ShoppingListAssistant(
+        ShoppingListService(":memory:"), web_url_provider=lambda: "https://example.trycloudflare.com"
+    )
+    for message in ("חלב", "רשימה", "עזרה", "נקה"):
+        assert "https://example.trycloudflare.com" in assistant.handle_message(message)
+
+
+def test_help_omits_web_url_when_provider_returns_none():
+    assistant = ShoppingListAssistant(ShoppingListService(":memory:"), web_url_provider=lambda: None)
+    assert "🌐" not in assistant.handle_message("עזרה")

@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=pi
+Group=pi
 WorkingDirectory=/home/pi/shopping-whatsapp-bot
 ExecStart=/home/pi/shopping-whatsapp-bot/venv/bin/python main.py
 EnvironmentFile=/home/pi/shopping-whatsapp-bot/.env

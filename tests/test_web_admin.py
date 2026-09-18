@@ -36,6 +36,30 @@ def app(service, env_file):
     return create_admin_app(config, FakeWhatsAppClient(), service, env_path=env_file)
 
 
+def test_dashboard_shows_public_url_when_tunnel_available(service, env_file):
+    class FakeTunnel:
+        public_url = "https://example.trycloudflare.com"
+
+    config = Config(db_path=":memory:", session_path="data/session.db", allowed_chat_jid="123@g.us")
+    app = create_admin_app(
+        config, FakeWhatsAppClient(), service, tunnel=FakeTunnel(), env_path=env_file
+    )
+    body = app.test_client().get("/").get_data(as_text=True)
+    assert "example.trycloudflare.com" in body
+
+
+def test_status_endpoint_reports_public_url(service, env_file):
+    class FakeTunnel:
+        public_url = "https://example.trycloudflare.com"
+
+    config = Config(db_path=":memory:", session_path="data/session.db", allowed_chat_jid="123@g.us")
+    app = create_admin_app(
+        config, FakeWhatsAppClient(), service, tunnel=FakeTunnel(), env_path=env_file
+    )
+    body = app.test_client().get("/status").get_json()
+    assert body["public_url"] == "https://example.trycloudflare.com"
+
+
 def test_dashboard_shows_status_config_and_list(app):
     client = app.test_client()
     response = client.get("/")

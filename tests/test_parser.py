@@ -16,6 +16,11 @@ def test_help_command():
     assert parse("עזרה").action == Action.HELP
 
 
+def test_site_command():
+    assert parse("אתר הרשימה").action == Action.SITE
+    assert parse("אתר רשימה").action == Action.SITE
+
+
 def test_clear_command_both_phrasings():
     assert parse("נקה").action == Action.CLEAR
     assert parse("מחק הכל").action == Action.CLEAR

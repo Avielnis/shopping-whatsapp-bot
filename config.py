@@ -12,3 +12,4 @@ class Config:
     session_path: str = os.getenv("SESSION_PATH", "data/session.db")
     allowed_chat_jid: str = os.getenv("ALLOWED_CHAT_JID", "")
     admin_port: int = int(os.getenv("ADMIN_PORT", "8080"))
+    list_page_port: int = int(os.getenv("LIST_PAGE_PORT", "8081"))

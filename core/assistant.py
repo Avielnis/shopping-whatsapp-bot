@@ -1,3 +1,5 @@
+from typing import Callable, Optional
+
 from core.emoji_lookup import label as with_emoji
 from core.models import Action
 from core.parser import parse
@@ -13,21 +15,29 @@ HELP_TEXT = (
     "• בטל סימון <מוצר> — ביטול סימון\n"
     "• מחק <מוצר> — מחיקת מוצר מהרשימה\n"
     "• נקה / מחק הכל — ניקוי הרשימה כולה\n"
+    "• אתר הרשימה — קבלת קישור לאתר הרשימה\n"
     "• עזרה — הצגת ההודעה הזו\n\n"
     "ניתן גם להשתמש במספר מהרשימה במקום שם המוצר, למשל: מחק 1"
 )
 
 
 class ShoppingListAssistant:
-    def __init__(self, service: ShoppingListService):
+    def __init__(
+        self,
+        service: ShoppingListService,
+        web_url_provider: Optional[Callable[[], Optional[str]]] = None,
+    ):
         self._service = service
+        self._web_url_provider = web_url_provider
 
     def handle_message(self, text: str) -> str:
-        return f"{BOT_LABEL}\n{self._dispatch(text)}"
+        return f"{BOT_LABEL}\n{self._with_link(self._dispatch(text))}"
 
     def _dispatch(self, text: str) -> str:
         command = parse(text)
 
+        if command.action == Action.SITE:
+            return ""  # the link itself is added by _with_link
         if command.action == Action.HELP:
             return HELP_TEXT
         if command.action == Action.LIST:
@@ -80,6 +90,13 @@ class ShoppingListAssistant:
 
     def _with_full_list(self, reply: str) -> str:
         return f"{reply}\n\n{self._format_list()}"
+
+    def _with_link(self, body: str) -> str:
+        url = self._web_url_provider() if self._web_url_provider else None
+        if not url:
+            return body or "הקישור לאתר עדיין לא מוכן, נסה שוב בעוד רגע 🙁"
+        link_line = f"🌐 אתר הרשימה: {url}"
+        return f"{body}\n\n{link_line}" if body else link_line
 
     @staticmethod
     def _format_reply(groups: list[tuple[str, list[str]]]) -> str:

@@ -2,6 +2,7 @@ import logging
 import re
 import subprocess
 import threading
+import time
 
 from dotenv import set_key
 from flask import Flask, jsonify, redirect, render_template_string, request
@@ -9,6 +10,7 @@ from flask import Flask, jsonify, redirect, render_template_string, request
 from config import Config
 from core.emoji_lookup import label as with_emoji
 from core.shopping_list import ShoppingListService
+from frontends.cloudflare_tunnel import CloudflareTunnel
 from frontends.whatsapp_client import WhatsAppClient
 
 log = logging.getLogger(__name__)
@@ -111,6 +113,10 @@ _PAGE = """
       <p class="hint">Scan with WhatsApp → Linked Devices → Link a Device</p>
       <img id="qr-img" src="{{ qr_data_uri or '' }}" alt="WhatsApp pairing QR code">
     </div>
+
+    <p class="hint" id="public-url-hint" {{ '' if public_url else 'hidden' }}>
+      🌐 Public link (works from anywhere): <a id="public-url-link" href="{{ public_url or '#' }}" target="_blank">{{ public_url or '' }}</a>
+    </p>
 
     <h2>Shopping list</h2>
     <form method="post" action="/list/add" class="add-row">
@@ -220,6 +226,8 @@ const connBadge = document.getElementById('conn-badge');
 const connText = document.getElementById('conn-text');
 const qrSection = document.getElementById('qr-section');
 const qrImg = document.getElementById('qr-img');
+const publicUrlHint = document.getElementById('public-url-hint');
+const publicUrlLink = document.getElementById('public-url-link');
 setInterval(async () => {
   try {
     const res = await fetch('/status');
@@ -228,6 +236,11 @@ setInterval(async () => {
     connText.textContent = data.connected ? 'Connected' : 'Waiting';
     qrSection.hidden = !data.qr_data_uri;
     if (data.qr_data_uri) qrImg.src = data.qr_data_uri;
+    publicUrlHint.hidden = !data.public_url;
+    if (data.public_url) {
+      publicUrlLink.href = data.public_url;
+      publicUrlLink.textContent = data.public_url;
+    }
   } catch (e) { /* ignore transient network errors */ }
 }, 3000);
 </script>
@@ -246,7 +259,11 @@ def _read_log_tail() -> str:
 
 
 def create_admin_app(
-    config: Config, whatsapp_client: WhatsAppClient, service: ShoppingListService, env_path: str = ".env"
+    config: Config,
+    whatsapp_client: WhatsAppClient,
+    service: ShoppingListService,
+    tunnel: CloudflareTunnel | None = None,
+    env_path: str = ".env",
 ) -> Flask:
     app = Flask(__name__)
 
@@ -257,6 +274,7 @@ def create_admin_app(
             _PAGE,
             connected=whatsapp_client.is_connected,
             qr_data_uri=whatsapp_client.qr_data_uri,
+            public_url=tunnel.public_url if tunnel else None,
             pending_count=len(pending),
             collected_count=len(collected),
             pending_items=[{"name": name, "label": with_emoji(name)} for name in pending],
@@ -275,7 +293,11 @@ def create_admin_app(
 
     @app.get("/status")
     def status():
-        return jsonify(connected=whatsapp_client.is_connected, qr_data_uri=whatsapp_client.qr_data_uri)
+        return jsonify(
+            connected=whatsapp_client.is_connected,
+            qr_data_uri=whatsapp_client.qr_data_uri,
+            public_url=tunnel.public_url if tunnel else None,
+        )
 
     @app.post("/list/add")
     def list_add():
@@ -321,5 +343,15 @@ def _reboot():
     subprocess.run(["sudo", "reboot"])
 
 
-def run_admin_server(app: Flask, host: str = "0.0.0.0", port: int = 8080):
-    app.run(host=host, port=port)
+def run_admin_server(app: Flask, host: str = "0.0.0.0", port: int = 8080, retries: int = 5):
+    for attempt in range(1, retries + 1):
+        try:
+            app.run(host=host, port=port)
+            return
+        except SystemExit:
+            log.warning(
+                "דף הניהול נכשל בהאזנה ל-%s:%s (ניסיון %d/%d), מנסה שוב בעוד 2 שניות",
+                host, port, attempt, retries,
+            )
+            time.sleep(2)
+    log.error("דף הניהול לא הצליח להאזין ל-%s:%s אחרי %d ניסיונות", host, port, retries)

@@ -16,6 +16,8 @@ def parse(text: str) -> ParsedCommand:
         return ParsedCommand(Action.LIST)
     if text in ("עזרה", "פקודות"):
         return ParsedCommand(Action.HELP)
+    if text in ("אתר הרשימה", "אתר רשימה"):
+        return ParsedCommand(Action.SITE)
     if text in ("נקה", "מחק הכל"):
         return ParsedCommand(Action.CLEAR)
     if text.startswith("בטל סימון"):
