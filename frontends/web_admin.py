@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 _LOG_FILE = "bot.log"
 _LOG_TAIL_LINES = 200
-_SPLIT_RE = re.compile(r"[,\s]+")
+_SPLIT_RE = re.compile(r"[,\r\n]+")
 
 _PAGE = """
 <!doctype html>
@@ -120,7 +120,7 @@ _PAGE = """
 
     <h2>Shopping list</h2>
     <form method="post" action="/list/add" class="add-row">
-      <input type="text" name="text" placeholder="Add item(s), comma/space/newline separated" autocomplete="off">
+      <input type="text" name="text" placeholder="Add item(s), comma/newline separated" autocomplete="off">
       <button type="submit">Add</button>
     </form>
 
@@ -301,7 +301,11 @@ def create_admin_app(
 
     @app.post("/list/add")
     def list_add():
-        items = [item for item in _SPLIT_RE.split(request.form.get("text", "").strip()) if item]
+        items = [
+            item.strip()
+            for item in _SPLIT_RE.split(request.form.get("text", "").strip())
+            if item.strip()
+        ]
         if items:
             service.add_items(items)
         return redirect("/")

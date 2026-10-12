@@ -11,6 +11,7 @@ class Action(Enum):
     CLEAR = auto()
     HELP = auto()
     SITE = auto()
+    DELETE_MARKED = auto()
 
 
 @dataclass

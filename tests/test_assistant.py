@@ -93,6 +93,15 @@ def test_clear_reply_includes_the_full_list(assistant):
     assert "נוקתה" in reply and "ריקה" in reply
 
 
+def test_delete_marked_removes_only_collected_items(assistant):
+    assistant.handle_message("חלב, לחם")
+    assistant.handle_message("סמן חלב")
+    reply = assistant.handle_message("מחק מסומנים")
+    assert "נמחקו" in reply and "חלב" in reply
+    pending, collected = assistant._service.get_list()
+    assert pending == ["לחם"] and collected == []
+
+
 def test_help_reply_does_not_include_the_full_list(assistant):
     assistant.handle_message("חלב")
     reply = assistant.handle_message("עזרה")

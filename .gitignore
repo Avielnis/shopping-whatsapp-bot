@@ -7,3 +7,5 @@ __pycache__/
 venv/
 .pytest_cache/
 .idea/
+deploy/deploy.env
+/deploy/deploy.env.example

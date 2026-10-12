@@ -9,12 +9,13 @@ BOT_LABEL = "🤖 _בוט_"
 
 HELP_TEXT = (
     "🛒 *פקודות הבוט*\n\n"
-    "• שליחת מוצר/ים (מופרדים בפסיק, רווח או שורה חדשה) — הוספה לרשימה\n"
+    "• שליחת מוצר/ים (מופרדים בפסיק או בשורה חדשה) — הוספה לרשימה\n"
     "• רשימה — הצגת הרשימה\n"
     "• סמן <מוצר> — סימון כנאסף\n"
     "• בטל סימון <מוצר> — ביטול סימון\n"
     "• מחק <מוצר> — מחיקת מוצר מהרשימה\n"
     "• נקה / מחק הכל — ניקוי הרשימה כולה\n"
+    "• מחק מסומנים — מחיקת המוצרים שנאספו\n"
     "• אתר הרשימה — קבלת קישור לאתר הרשימה\n"
     "• עזרה — הצגת ההודעה הזו\n\n"
     "ניתן גם להשתמש במספר מהרשימה במקום שם המוצר, למשל: מחק 1"
@@ -45,6 +46,9 @@ class ShoppingListAssistant:
         if command.action == Action.CLEAR:
             self._service.clear_all()
             return self._with_full_list("🧹 הרשימה נוקתה")
+        if command.action == Action.DELETE_MARKED:
+            removed = self._service.delete_collected()
+            return self._with_full_list(self._format_reply([("🗑️ נמחקו", removed)]))
         if not command.items:
             return self._with_full_list("לא זיהיתי מוצרים בהודעה 🤔")
 

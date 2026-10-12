@@ -46,3 +46,17 @@ def test_add_splits_multiple_items(app, service):
     app.test_client().post("/add", data={"text": "ביצים, גבינה"})
     pending, _ = service.get_list()
     assert "ביצים" in pending and "גבינה" in pending
+
+
+def test_remove_deletes_item(app, service):
+    app.test_client().post("/remove", data={"name": "חלב"})
+    pending, collected = service.get_list()
+    assert "חלב" not in pending and "חלב" not in collected
+    assert "לחם" in pending
+
+
+def test_rename_updates_item_text(app, service):
+    response = app.test_client().post("/rename", data={"old_name": "חלב", "new_name": "חלב 3%"})
+    assert response.get_json()["ok"] is True
+    pending, _ = service.get_list()
+    assert "חלב 3%" in pending

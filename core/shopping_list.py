@@ -129,3 +129,22 @@ class ShoppingListService:
     def clear_all(self):
         self._conn.execute("DELETE FROM items")
         self._conn.commit()
+
+    def delete_collected(self) -> list[str]:
+        _, collected = self.get_list()
+        removed, _ = self.remove_items(collected)
+        return removed
+
+    def rename_item(self, old_name: str, new_name: str) -> bool:
+        new_name = new_name.strip()
+        if not new_name:
+            return False
+        try:
+            cur = self._conn.execute(
+                "UPDATE items SET name = ?, normalized_name = ? WHERE normalized_name = ?",
+                (new_name, _normalize(new_name), _normalize(old_name)),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+        except sqlite3.IntegrityError:
+            return False  # ponytail: renaming onto an existing item name is rejected, not merged

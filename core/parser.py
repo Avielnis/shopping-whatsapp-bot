@@ -2,11 +2,11 @@ import re
 
 from core.models import Action, ParsedCommand
 
-_SPLIT_RE = re.compile(r"[,\s]+")
+_SPLIT_RE = re.compile(r"[,\r\n]+")
 
 
 def _split_items(text: str) -> list[str]:
-    return [item for item in _SPLIT_RE.split(text.strip()) if item]
+    return [item.strip() for item in _SPLIT_RE.split(text.strip()) if item.strip()]
 
 
 def parse(text: str) -> ParsedCommand:
@@ -20,6 +20,8 @@ def parse(text: str) -> ParsedCommand:
         return ParsedCommand(Action.SITE)
     if text in ("נקה", "מחק הכל"):
         return ParsedCommand(Action.CLEAR)
+    if text == "מחק מסומנים":
+        return ParsedCommand(Action.DELETE_MARKED)
     if text.startswith("בטל סימון"):
         return ParsedCommand(Action.UNMARK, _split_items(text[len("בטל סימון"):]))
     if text.startswith("סמן"):

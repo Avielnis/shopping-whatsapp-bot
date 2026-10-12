@@ -9,7 +9,7 @@ from core.shopping_list import ShoppingListService
 
 log = logging.getLogger(__name__)
 
-_SPLIT_RE = re.compile(r"[,\s]+")
+_SPLIT_RE = re.compile(r"[,\r\n]+")
 
 _PAGE = """
 <!doctype html>
@@ -52,8 +52,24 @@ _PAGE = """
     align-items: center; justify-content: center; color: var(--bg); font-size: .85rem;
   }
   li.collected .check { background: var(--accent); border-color: var(--accent); }
-  .name { flex: 1; font-size: 1rem; }
+  .name { flex: 1; font-size: 1rem; cursor: text; }
+  .name-edit {
+    flex: 1; font-size: 1rem; background: var(--bg); color: var(--text);
+    border: 1px solid var(--accent); border-radius: 6px; outline: none;
+    font-family: inherit; padding: .3rem .5rem;
+  }
   .emoji { font-size: 1.3rem; flex: none; }
+  .confirm-edit {
+    width: 1.8rem; height: 1.8rem; border-radius: 50%; border: none; flex: none;
+    background: var(--accent); color: #06280f; font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .delete {
+    width: 1.8rem; height: 1.8rem; border-radius: 8px; border: none; flex: none;
+    background: transparent; color: var(--muted); font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .delete:hover { background: rgba(239, 68, 68, .15); color: #ef4444; }
 
   #add-bar {
     position: fixed; bottom: 0; inset-inline: 0; display: flex; gap: .5rem;
@@ -88,11 +104,14 @@ _PAGE = """
   </form>
 
 <script>
+let editingName = false; // ponytail: skip auto-refresh while a name edit box is open, so it doesn't get wiped mid-edit
+
 function rowHtml(item, collected) {
   return `<li class="${collected ? 'collected' : ''}" data-name="${item.name}">
     <button class="check" aria-label="סמן">${collected ? '✓' : ''}</button>
-    <span class="name">${item.name}</span>
     <span class="emoji">${item.emoji}</span>
+    <span class="name">${item.name}</span>
+    <button class="delete" aria-label="מחק">🗑️</button>
   </li>`;
 }
 
@@ -116,6 +135,12 @@ function render(data) {
   document.querySelectorAll('.check').forEach(btn => {
     btn.addEventListener('click', onToggle);
   });
+  document.querySelectorAll('.delete').forEach(btn => {
+    btn.addEventListener('click', onDelete);
+  });
+  document.querySelectorAll('.name').forEach(span => {
+    span.addEventListener('click', onNameClick);
+  });
 }
 
 async function fetchData() {
@@ -124,6 +149,7 @@ async function fetchData() {
 }
 
 async function refresh() {
+  if (editingName) return;
   render(await fetchData());
 }
 
@@ -142,6 +168,54 @@ function onToggle(e) {
   const body = new URLSearchParams({ name });
   if (nowCollected) body.set('checked', 'on');
   fetch('/toggle', { method: 'POST', body }).then(refresh);
+}
+
+function onNameClick(e) {
+  const span = e.currentTarget;
+  const li = span.closest('li');
+  const oldName = li.dataset.name;
+  const deleteBtn = li.querySelector('.delete');
+
+  const input = document.createElement('input');
+  input.className = 'name-edit';
+  input.value = oldName;
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'confirm-edit';
+  confirmBtn.setAttribute('aria-label', 'אישור');
+  confirmBtn.textContent = '✓';
+
+  span.replaceWith(input);       // takes the name's slot, no layout shift
+  deleteBtn.replaceWith(confirmBtn); // takes the trash icon's slot, no layout shift
+  input.focus();
+  setTimeout(() => input.select(), 0); // select-all after focus settles (mobile keyboards fight this otherwise)
+  editingName = true;
+
+  let done = false;
+  function commit() {
+    if (done) return;
+    done = true;
+    editingName = false;
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) {
+      li.dataset.name = newName;
+      fetch('/rename', { method: 'POST', body: new URLSearchParams({ old_name: oldName, new_name: newName }) })
+        .then(refresh);
+    } else {
+      refresh();
+    }
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') input.blur(); });
+  confirmBtn.addEventListener('click', commit);
+}
+
+function onDelete(e) {
+  const li = e.currentTarget.closest('li');
+  const name = li.dataset.name;
+  li.remove();
+  fetch('/remove', { method: 'POST', body: new URLSearchParams({ name }) }).then(refresh);
 }
 
 document.getElementById('add-bar').addEventListener('submit', async (e) => {
@@ -191,9 +265,27 @@ def create_list_page_app(service: ShoppingListService) -> Flask:
 
     @app.post("/add")
     def add():
-        items = [item for item in _SPLIT_RE.split(request.form.get("text", "").strip()) if item]
+        items = [
+            item.strip()
+            for item in _SPLIT_RE.split(request.form.get("text", "").strip())
+            if item.strip()
+        ]
         if items:
             service.add_items(items)
+        return jsonify(ok=True)
+
+    @app.post("/rename")
+    def rename():
+        old_name = request.form.get("old_name", "")
+        new_name = request.form.get("new_name", "")
+        ok = bool(old_name and new_name and service.rename_item(old_name, new_name))
+        return jsonify(ok=ok)
+
+    @app.post("/remove")
+    def remove():
+        name = request.form.get("name", "")
+        if name:
+            service.remove_items([name])
         return jsonify(ok=True)
 
     return app
