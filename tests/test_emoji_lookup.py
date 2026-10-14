@@ -1,4 +1,14 @@
-from core.emoji_lookup import emoji_for, label
+from core.emoji_lookup import _CATEGORIES, category_index, emoji_for, label
+
+
+def test_no_keyword_appears_in_two_categories():
+    all_keywords = [kw for _, items in _CATEGORIES for kw in items]
+    assert len(all_keywords) == len(set(all_keywords))
+
+
+def test_multi_word_keyword_beats_single_word():
+    assert emoji_for("תפוח אדמה") == "🥔"
+    assert category_index("תפוח אדמה") < category_index("תפוח")  # vegetables before fruit
 
 
 def test_known_item_gets_matching_emoji():

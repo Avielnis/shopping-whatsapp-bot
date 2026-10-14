@@ -2,6 +2,8 @@ import re
 import sqlite3
 from datetime import datetime
 
+from core.emoji_lookup import category_index
+
 _WS_RE = re.compile(r"\s+")
 
 
@@ -124,6 +126,7 @@ class ShoppingListService:
                 "SELECT name FROM items WHERE status = 'collected' ORDER BY collected_at"
             )
         ]
+        pending.sort(key=category_index)  # stable: keeps add-order within each category
         return pending, collected
 
     def clear_all(self):

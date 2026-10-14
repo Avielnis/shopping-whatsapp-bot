@@ -32,6 +32,12 @@ def test_resolve_numbers_span_pending_then_collected(service):
     assert service.resolve(["1", "2"]) == ["לחם", "חלב"]
 
 
+def test_pending_items_are_grouped_by_category(service):
+    service.add_items(["קולה", "עגבניות", "לחם", "מלפפון", "משהו לא מוכר"])
+    pending, _ = service.get_list()
+    assert pending == ["עגבניות", "מלפפון", "לחם", "קולה", "משהו לא מוכר"]
+
+
 def test_delete_collected_removes_only_collected_items(service):
     service.add_items(["חלב", "לחם"])
     service.mark_collected(["חלב"])
